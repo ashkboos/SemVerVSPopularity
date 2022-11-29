@@ -1,0 +1,2 @@
+Interesting packages:
+org.springframework:spring-jdbc - you can see the incursions drop through major version evolution

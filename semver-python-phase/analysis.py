@@ -312,7 +312,7 @@ def calculate_duplicate_names(api_extensions_list):
         method outputs how often a method signature is altered by changing the return type or changing
         the arguments.
     """
-    zipped = zip(breaking_changes, api_extensions_list)
+    zipped = zip(breaking_changes_missing, api_extensions_list)
     acc = 0
     number_of_names = 0
     api_extensions_without_duplicates = list()
@@ -468,29 +468,47 @@ def intersect(removed, added):
     print(len(removals.union(additions)))
 
 
+def add_missing_artifacts(bc_list, aix_list):
+    artifacts = read_artifacts_txt()
+
+    for artifact in artifacts:
+        found = False
+        for inner_artifact in bc_list:
+            inner_artifact_name = inner_artifact.groupId + "|" + inner_artifact.artifactId
+            if inner_artifact_name == artifact:
+                found = True
+        if not found:
+            artifact_to_add = Artifact(artifact.split("|")[0], artifact.split("|")[1], 0, 1, list())
+            bc_list.append(artifact_to_add)
+            aix_list.append(artifact_to_add)
+
+    return bc_list, aix_list
+
+
 if __name__ == '__main__':
     try:
         os.makedirs(project_location + 'semver-python-phase/resources/plots')
     except OSError:
         pass
 
-    artifacts = read_artifacts_txt()
 
     # OLD:
-    breaking_changes = compress_major_to_package(read_file('breaking_changes'))
-    api_extensions = compress_major_to_package(read_file('api_extensions'))
+    # breaking_changes_missing = compress_major_to_package(read_file('breaking_changes'))
+    # api_extensions_missing = compress_major_to_package(read_file('api_extensions'))
+
 
     # NEW (Comment previous 2 lines and uncomment the following 3 lines):
-    # breaking_changes = compress_major_to_package(read_file('breaking_changes_bynow'))
-    # api_extensions_with_duplicates = compress_major_to_package(read_file('api_extensions_bynow'))
-    # api_extensions = calculate_duplicate_names(api_extensions_with_duplicates)
+    breaking_changes_missing = compress_major_to_package(read_file('breaking_changes'))
+    api_extensions_with_duplicates = compress_major_to_package(read_file('api_extensions'))
+    api_extensions_missing = calculate_duplicate_names(api_extensions_with_duplicates)
+    breaking_changes, api_extensions = add_missing_artifacts(breaking_changes_missing, api_extensions_missing)
 
     one = read_all_coordinates('breaking_changes')
     two = read_all_coordinates('breaking_changes_bynow')
     three = two.difference(one)
 
     print("Numbers:")
-    print("Number of artifacts:", len(artifacts))
+    # print("Number of artifacts:", len(artifacts))
     print("Percentage of artifacts with BC or AX:", calculate_percentage_or(breaking_changes, api_extensions))
     print("Percentage of artifacts with BC:", calculate_percentage(breaking_changes))
     print("Percentage of artifacts with AX", calculate_percentage(api_extensions))

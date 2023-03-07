@@ -7,6 +7,7 @@ import seaborn as sns
 from scipy import stats
 
 sns.set_theme()
+project_location = '/home/simcha/PycharmProjects/semver-vs-popularity/'
 
 
 class Major:
@@ -46,7 +47,7 @@ def to_string(inp):
 
 def read_file(file: str):
     # Use a breakpoint in the code line below to debug your script.
-    path = Path('/home/simcha/dev/MavenResultsAnalysis/resources/' + file + '.txt')
+    path = Path(project_location + 'semver-python-phase/resources/' + file + '.txt')
     print(path)
     with open(path, 'r') as file:
         versions = list()
@@ -70,7 +71,7 @@ def read_file(file: str):
 
 def read_all_coordinates(file: str):
     # Use a breakpoint in the code line below to debug your script.
-    path = Path('/home/simcha/dev/MavenResultsAnalysis/resources/' + file + '.txt')
+    path = Path(project_location + 'semver-python-phase/resources/' + file + '.txt')
     print(path)
     with open(path, 'r') as file:
         artifacts = set()
@@ -85,7 +86,7 @@ def read_all_coordinates(file: str):
 
 def read_artifacts_txt():
     # Use a breakpoint in the code line below to debug your script.
-    path = Path('/home/simcha/dev/MavenResultsAnalysis/resources/artifacts.txt')
+    path = Path(project_location + 'semver-python-phase/resources/artifacts.txt')
 
     with open(path, 'r') as file:
         input_artifacts = set()
@@ -99,7 +100,7 @@ def read_artifacts_txt():
 
 def read_expanded_coords():
     # Use a breakpoint in the code line below to debug your script.
-    path = Path('/home/simcha/dev/MavenResultsAnalysis/resources/mvn.expanded_coords.txt')
+    path = Path(project_location + 'semver-python-phase/resources/mvn.expanded_coords.txt')
     i = 0
     with open(path, 'r') as file:
         for _ in file:
@@ -115,7 +116,7 @@ def read_popularity(metric: str):
         if len(version.callables) > 0:
             package_name = version.groupId + ':' + version.artifactId + '$'
             prefixed_files = [filename for filename in os.listdir(Path(os.getcwd()).parent.joinpath(
-                '/home/simcha/dev/MavenResultsAnalysis/resources/popularity/')) if
+                project_location + 'semver-python-phase/resources/popularity/')) if
                               filename.startswith(package_name)]
             if len(prefixed_files) > 0:
                 files.add(str(prefixed_files[0]))
@@ -123,7 +124,7 @@ def read_popularity(metric: str):
     for one in files:
         try:
             with open(Path(os.getcwd()).parent.joinpath(
-                    '/home/simcha/dev/MavenResultsAnalysis/resources/popularity/' + one + '/' + metric + '.bin')) as file:
+                    project_location + 'semver-python-phase/resources/popularity/' + one + '/' + metric + '.bin')) as file:
                 for line in file:
                     callable_id = line.split(",")[0]
                     popularity = line.split(",")[1][:-1]
@@ -173,7 +174,7 @@ def trendline(violation):
     plt.xscale("log")
     # plt.xlim(40, None)
     plt.savefig(
-        '/home/simcha/dev/MavenResultsAnalysis/resources/plots/trendline_' + violation + '_compressed.pdf')
+        project_location + 'semver-python-phase/resources/plots/trendline_' + violation + '_compressed.pdf')
     plt.show()
 
 
@@ -190,7 +191,7 @@ def violin(violation):
     plt.xlabel("Ratio of " + to_string(violation) + " to respective number of methods")
     ax = plt.gca()
     ax.set_xlim([None, 0.55])
-    plt.savefig('/home/simcha/dev/MavenResultsAnalysis/resources/plots/violin_' + violation + '.pdf')
+    plt.savefig(project_location + 'semver-python-phase/resources/plots/violin_' + violation + '.pdf')
     plt.show()
 
 
@@ -211,7 +212,7 @@ def histogram(violation):
     plt.xlabel("Percentage of methods with " + to_string(violation))
     # plt.yscale('log')
     plt.savefig(
-        '/home/simcha/dev/MavenResultsAnalysis/resources/plots/histogram_' + violation + '_compressed.pdf')
+        project_location + 'semver-python-phase/resources/plots/histogram_' + violation + '_compressed.pdf')
     plt.show()
 
 
@@ -222,7 +223,7 @@ def calculate_popularity(pop_metric):
     bc_popularity_metrics = list()
     all_popularity_metrics = list()
     callable_ids = set()
-    with open('/home/simcha/dev/MavenResultsAnalysis/resources/callables.txt') as callable_file:
+    with open(project_location + 'semver-python-phase/resources/callables.txt') as callable_file:
         for callable_id in callable_file.readline().split(","):
             callable_ids.add(callable_id)
 
@@ -248,7 +249,7 @@ def calculate_popularity(pop_metric):
 
     plt.legend()
     plt.savefig(
-        '/home/simcha/dev/MavenResultsAnalysis/resources/plots/kdeplot_' + pop_metric + '.pdf')
+        project_location + 'semver-python-phase/resources/plots/kdeplot_' + pop_metric + '.pdf')
     plt.show()
 
     f, ax = plt.subplots(2, figsize=(8, 6))
@@ -264,7 +265,7 @@ def calculate_popularity(pop_metric):
 
     plt.subplots_adjust(hspace=0.4)
     plt.savefig(
-        '/home/simcha/dev/MavenResultsAnalysis/resources/plots/violin_popularity_' + pop_metric + '.pdf')
+        project_location + 'semver-python-phase/resources/plots/violin_popularity_' + pop_metric + '.pdf')
     plt.show()
 
     print(stats.ttest_ind(non_zero_no_bc, non_zero_bc, alternative='greater'))
@@ -300,10 +301,10 @@ def quintile_dep_percentage():
     xs = np.arange(0, 5 + 1 / len(popularities), 5 / (len(popularities) - 1))
     i = [float(x) for x in popularities.values()]
     sns.regplot(x=xs, y=i)
-    plt.savefig("/home/simcha/dev/MavenResultsAnalysis/resources/plots/quintile-dep-percentage.pdf")
+    plt.savefig(project_location + 'semver-python-phase/resources/plots/quintile-dep-percentage.pdf')
 
 
-def calculate_duplicate_names():
+def calculate_duplicate_names(api_extensions_list):
     """
     This method calculated all duplicated names. A duplicated name is:
         A version has removed the method m(), but added m(int). This version is then attributed a
@@ -311,9 +312,10 @@ def calculate_duplicate_names():
         method outputs how often a method signature is altered by changing the return type or changing
         the arguments.
     """
-    zipped = zip(breaking_changes, api_extensions)
+    zipped = zip(breaking_changes, api_extensions_list)
     acc = 0
     number_of_names = 0
+    api_extensions_without_duplicates = list()
 
     for (artifact_bc, artifact_api) in zipped:
         assert hash(artifact_bc) == hash(artifact_api)
@@ -334,21 +336,37 @@ def calculate_duplicate_names():
         # For each callable involved in apix:
         for i in range(0, len(artifact_api.callables)):
             version, name = artifact_api.get_name(i)
+            if name.__contains__('dumpAsHex'):
+                print(2)
             callable_set_package.add(name)
             if version not in api_version_dict:
                 api_version_dict[version] = set()
             api_version_dict[version].add(name)
-
+        to_remove_from_aix = set()
         # Finally for each version see if there is an overlap in the breaking change names
         # and the api extension names:
         for version in bc_version_dict.keys():
             if version in api_version_dict:
+                if len(bc_version_dict[version].intersection(api_version_dict[version])) != 0:
+                    i = 0
+                to_remove_from_aix = to_remove_from_aix.union(bc_version_dict[version].intersection(api_version_dict[version]))
                 acc += len(bc_version_dict[version].intersection(api_version_dict[version]))
 
         number_of_names += len(callable_set_package)
 
+        # Remove duplicated names from AIX
+        callables_without_duplicates = list()
+        for i in range(0, len(artifact_api.callables)):
+            version, name = artifact_api.get_name(i)
+            if name not in to_remove_from_aix:
+                callables_without_duplicates.append(artifact_api.callables[i])
+        artifact_to_add = artifact_api
+        artifact_to_add.callables = callables_without_duplicates
+        api_extensions_without_duplicates.append(artifact_to_add)
+
     print("Total number of unique names involved in bc or apix:", number_of_names)
     print("Of which total duplicated:", acc)
+    return api_extensions_without_duplicates
 
 
 def difference_between_majors():
@@ -380,7 +398,7 @@ def calculate_percentage_or(versions_one, versions_two):
 
 def versions_with_modules_bc(versions):
     artifacts = [(x.groupId + ":" + x.artifactId) for x in versions]
-    path = Path('/home/simcha/dev/MavenResultsAnalysis/resources/mvn.expanded_coords.txt')
+    path = Path(project_location + 'semver-python-phase/resources/mvn.expanded_coords.txt')
     i = 0
     with open(path, 'r') as file:
         for version in file:
@@ -395,7 +413,7 @@ def versions_with_modules_bc(versions):
 
 def versions_with_modules_ax(versions):
     artifacts = [(x.groupId + ":" + x.artifactId) for x in versions]
-    path = Path('/home/simcha/dev/MavenResultsAnalysis/resources/mvn.expanded_coords.txt')
+    path = Path(project_location + 'semver-python-phase/resources/mvn.expanded_coords.txt')
     i = 0
     with open(path, 'r') as file:
         for version in file:
@@ -452,14 +470,20 @@ def intersect(removed, added):
 
 if __name__ == '__main__':
     try:
-        os.makedirs('/home/simcha/dev/MavenResultsAnalysis/resources/plots')
+        os.makedirs(project_location + 'semver-python-phase/resources/plots')
     except OSError:
         pass
 
+    artifacts = read_artifacts_txt()
+
+    # OLD:
     breaking_changes = compress_major_to_package(read_file('breaking_changes'))
     api_extensions = compress_major_to_package(read_file('api_extensions'))
 
-    artifacts = read_artifacts_txt()
+    # NEW (Comment previous 2 lines and uncomment the following 3 lines):
+    # breaking_changes = compress_major_to_package(read_file('breaking_changes_bynow'))
+    # api_extensions_with_duplicates = compress_major_to_package(read_file('api_extensions_bynow'))
+    # api_extensions = calculate_duplicate_names(api_extensions_with_duplicates)
 
     one = read_all_coordinates('breaking_changes')
     two = read_all_coordinates('breaking_changes_bynow')

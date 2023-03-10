@@ -7,7 +7,7 @@ import seaborn as sns
 from scipy import stats
 
 sns.set_theme()
-project_location = '/home/simcha/PycharmProjects/semver-vs-popularity/'
+project_location = '/Users/mehdi/Desktop/MyMac/Phd/Research/MyPapers/MavenAPIPopularity/semver-vs-popularity/'
 
 
 class Major:
@@ -308,25 +308,41 @@ class Duplicate:
     class_name = None
     module_name = None
     method_name = None
-    return_and_parameters = None
+    return_type = None
+    parameters = None
+    category = None
 
     def __eq__(self, other):
+        # Return and parameters are different
         if self.class_name == other.class_name and self.method_name == other.method_name and self.module_name == other.module_name:
+            return True
+        if self.method_name == other.method_name and self.module_name == other.module_name and self.return_and_parameters == other.return_and_parameters:
             return True
         else:
             return False
 
-    def __init__(self, complete_label):
+    def __init__(self, complete_label, category):
         split_slash = complete_label.split("/")
         self.module_name = split_slash[0]
         split_dot = split_slash[1].split(".")
         self.class_name = split_dot[0]
         self.method_name = ''.join(split_dot[1::]).split("(")[0]
-        self.return_and_parameters = ''.join(split_dot[1::]).split("(")[1]
+        return_and_parameters = ''.join(split_dot[1::]).split("(")[1].split(")")
+        self.return_type = return_and_parameters[0]
+        self.parameters = return_and_parameters[1]
+        self.category = category
 
     def __hash__(self):
-        if self.class_name:
-            return hash(self.class_name + self.return_and_parameters + self.module_name)
+        if self.category == "module":
+            return hash(self.class_name + self.return_type + self.method_name + self.parameters)
+        if self.category == "class":
+            return hash(self.method_name + self.return_type + self.module_name + self.parameters)
+        if self.category == "method":
+            return hash(self.module_name + self.return_type + self.class_name + self.parameters)
+        if self.category == "params":
+            return hash(self.module_name + self.method_name + self.class_name + self.return_type)
+        if self.category == "return":
+            return hash(self.module_name + self.class_name + self.method_name + self.parameters)
         else:
             return 0
 
@@ -343,62 +359,64 @@ def calculate_duplicate_names(api_extensions_list):
     acc = 0
     number_of_names = 0
     api_extensions_without_duplicates = list()
-    total_removed = 0
 
-    for (artifact_bc, artifact_api) in zipped:
-        assert hash(artifact_bc) == hash(artifact_api)
+    categories = ['module', 'class', 'method', 'params', 'return']
+    for category in categories:
+        total_removed = 0
+        for (artifact_bc, artifact_api) in zipped:
+            assert hash(artifact_bc) == hash(artifact_api)
 
-        api_version_dict = dict()
-        bc_version_dict = dict()
+            api_version_dict = dict()
+            bc_version_dict = dict()
 
-        callable_set_package = set()
+            callable_set_package = set()
 
-        # For each callable involved in bc:
-        for i in range(0, len(artifact_bc.callables)):
-            version, name = artifact_bc.get_name(i)
-            possible_duplicate = Duplicate(name)
-            callable_set_package.add(name)
-            if version not in bc_version_dict:
-                bc_version_dict[version] = set()
-            bc_version_dict[version].add(possible_duplicate)
+            # For each callable involved in bc:
+            for i in range(0, len(artifact_bc.callables)):
+                version, name = artifact_bc.get_name(i)
+                possible_duplicate = Duplicate(name, category)
+                callable_set_package.add(name)
+                if version not in bc_version_dict:
+                    bc_version_dict[version] = set()
+                bc_version_dict[version].add(possible_duplicate)
 
-        # For each callable involved in apix:
-        for i in range(0, len(artifact_api.callables)):
-            version, name = artifact_api.get_name(i)
-            possible_duplicate = Duplicate(name)
+            # For each callable involved in apix:
+            for i in range(0, len(artifact_api.callables)):
+                version, name = artifact_api.get_name(i)
+                possible_duplicate = Duplicate(name, category)
 
-            callable_set_package.add(name)
-            if version not in api_version_dict:
-                api_version_dict[version] = set()
-            api_version_dict[version].add(possible_duplicate)
+                callable_set_package.add(name)
+                if version not in api_version_dict:
+                    api_version_dict[version] = set()
+                api_version_dict[version].add(possible_duplicate)
 
-        to_remove_from_aix = set()
-        # Finally for each version see if there is an overlap in the breaking change names
-        # and the api extension names:
-        for version in bc_version_dict.keys():
-            if version in api_version_dict:
-                to_remove_from_aix = to_remove_from_aix.union(bc_version_dict[version].intersection(api_version_dict[version]))
-                acc += len(bc_version_dict[version].intersection(api_version_dict[version]))
+            to_remove_from_aix = set()
+            # Finally for each version see if there is an overlap in the breaking change names
+            # and the api extension names:
+            for version in bc_version_dict.keys():
+                if version in api_version_dict:
+                    to_remove_from_aix = to_remove_from_aix.union(bc_version_dict[version].intersection(api_version_dict[version]))
+                    acc += len(bc_version_dict[version].intersection(api_version_dict[version]))
 
-        number_of_names += len(callable_set_package)
+            number_of_names += len(callable_set_package)
 
-        # Remove duplicated names from AIX
-        callables_without_duplicates = list()
-        for i in range(0, len(artifact_api.callables)):
-            version, name = artifact_api.get_name(i)
+            # Remove duplicated names from AIX
+            callables_without_duplicates = list()
+            for i in range(0, len(artifact_api.callables)):
+                version, name = artifact_api.get_name(i)
 
-            searching_for_duplicate = Duplicate(name)
-            if searching_for_duplicate not in to_remove_from_aix:
-                callables_without_duplicates.append(artifact_api.callables[i])
-            else:
-                total_removed += 1
+                searching_for_duplicate = Duplicate(name, category)
+                if searching_for_duplicate not in to_remove_from_aix:
+                    callables_without_duplicates.append(artifact_api.callables[i])
+                else:
+                    total_removed += 1
 
-        artifact_to_add = artifact_api
-        artifact_to_add.callables = callables_without_duplicates
-        artifact_to_add.violations = len(callables_without_duplicates)
+            artifact_to_add = artifact_api
+            artifact_to_add.callables = callables_without_duplicates
+            artifact_to_add.violations = len(callables_without_duplicates)
 
-        api_extensions_without_duplicates.append(artifact_to_add)
-    print("LEN: ", total_removed)
+            api_extensions_without_duplicates.append(artifact_to_add)
+        print("%s methods are in category %s" %( total_removed, category))
 
     print("Total number of unique names involved in bc or apix:", number_of_names)
     print("Of which total duplicated:", acc)

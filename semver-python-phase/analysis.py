@@ -48,7 +48,6 @@ def to_string(inp):
 def read_file(file: str):
     # Use a breakpoint in the code line below to debug your script.
     path = Path(project_location + 'semver-python-phase/resources/' + file + '.txt')
-    print(path)
     with open(path, 'r') as file:
         versions = list()
         file.readline()
@@ -65,7 +64,6 @@ def read_file(file: str):
             if str(callables) == "['']":
                 callables = list()
             versions.append(Major(groupId, artifactId, majorVersion, violations, numberMethods, callables))
-    print(i)
     return versions
 
 
@@ -167,14 +165,14 @@ def trendline(violation):
     filtered_x = list(map(lambda x: x[0], filtered))
     filtered_y = list(map(lambda x: x[1], filtered))
     sns.regplot(x=filtered_x, y=filtered_y, order=1)
-    print(filtered_x)
+
     plt.xlabel("Total number of methods")
     plt.ylabel("Total number of " + to_string(violation))
     plt.yscale("log")
     plt.xscale("log")
     # plt.xlim(40, None)
     plt.savefig(
-        project_location + 'semver-python-phase/resources/plots/trendline_' + violation + '_compressed.pdf')
+        project_location + 'semver-python-phase/resources/plots/trendline_' + violation + '.pdf')
     plt.show()
 
 
@@ -206,14 +204,14 @@ def histogram(violation):
         bc_list.append(version.violations / version.numberMethods * 100)
 
     bc_list.sort()
-    print(bc_list)
     sns.histplot(x=bc_list, bins=35, binrange=[0, 35])
     plt.ylabel("Number of artifacts")
     plt.xlabel("Percentage of methods with " + to_string(violation))
     # plt.yscale('log')
     plt.savefig(
-        project_location + 'semver-python-phase/resources/plots/histogram_' + violation + '_compressed.pdf')
+        project_location + 'semver-python-phase/resources/plots/histogram_' + violation + '.pdf')
     plt.show()
+    return bc_list
 
 
 def calculate_popularity(pop_metric):
@@ -313,13 +311,18 @@ class Duplicate:
     category = None
 
     def __eq__(self, other):
-        # Return and parameters are different
-        if self.class_name == other.class_name and self.method_name == other.method_name and self.module_name == other.module_name:
-            return True
-        if self.method_name == other.method_name and self.module_name == other.module_name and self.return_and_parameters == other.return_and_parameters:
-            return True
+        if self.category == "module":
+            return self.class_name == other.class_name and self.method_name == other.method_name and self.parameters == other.parameters and self.return_type == other.return_type
+        if self.category == "class":
+            return self.module_name == other.module_name and self.method_name == other.method_name and self.parameters == other.parameters and self.return_type == other.return_type
+        if self.category == "method":
+            return self.module_name == other.module_name and self.class_name == other.class_name  and self.parameters == other.parameters and self.return_type == other.return_type
+        if self.category == "params":
+            return self.module_name == other.module_name and self.class_name == other.class_name and self.method_name == other.method_name and self.return_type == other.return_type
+        if self.category == "return":
+            return self.module_name == other.module_name and self.class_name == other.class_name and self.method_name == other.method_name and self.parameters == other.parameters
         else:
-            return False
+            raise Exception("No duplication category specified!")
 
     def __init__(self, complete_label, category):
         split_slash = complete_label.split("/")
@@ -334,20 +337,20 @@ class Duplicate:
 
     def __hash__(self):
         if self.category == "module":
-            return hash(self.class_name + self.return_type + self.method_name + self.parameters)
+            return hash(self.class_name + self.method_name + self.parameters + self.return_type)
         if self.category == "class":
-            return hash(self.method_name + self.return_type + self.module_name + self.parameters)
+            return hash(self.module_name + self.method_name + self.parameters + self.return_type)
         if self.category == "method":
-            return hash(self.module_name + self.return_type + self.class_name + self.parameters)
+            return hash(self.module_name + self.class_name + self.parameters + self.return_type)
         if self.category == "params":
-            return hash(self.module_name + self.method_name + self.class_name + self.return_type)
+            return hash(self.module_name + self.class_name + self.method_name + self.return_type)
         if self.category == "return":
             return hash(self.module_name + self.class_name + self.method_name + self.parameters)
         else:
-            return 0
+            raise Exception("No duplication category specified!")
 
 
-def calculate_duplicate_names(api_extensions_list):
+def calculate_duplicate_names(breaking_changes, api_extensions_list):
     """
     This method calculated all duplicated names. A duplicated name is:
         A version has removed the method m(), but added m(int). This version is then attributed a
@@ -355,27 +358,23 @@ def calculate_duplicate_names(api_extensions_list):
         method outputs how often a method signature is altered by changing the return type or changing
         the arguments.
     """
-    zipped = zip(breaking_changes, api_extensions_list)
-    acc = 0
-    number_of_names = 0
-    api_extensions_without_duplicates = list()
+    countOverlapOfBCAndAPIEX(breaking_changes, api_extensions_list)
+
+    api_extensions_without_duplicates = set()
 
     categories = ['module', 'class', 'method', 'params', 'return']
     for category in categories:
+        acc = 0
         total_removed = 0
-        for (artifact_bc, artifact_api) in zipped:
+        for (artifact_bc, artifact_api) in zip(breaking_changes, api_extensions_list):
             assert hash(artifact_bc) == hash(artifact_api)
-
             api_version_dict = dict()
             bc_version_dict = dict()
-
-            callable_set_package = set()
 
             # For each callable involved in bc:
             for i in range(0, len(artifact_bc.callables)):
                 version, name = artifact_bc.get_name(i)
                 possible_duplicate = Duplicate(name, category)
-                callable_set_package.add(name)
                 if version not in bc_version_dict:
                     bc_version_dict[version] = set()
                 bc_version_dict[version].add(possible_duplicate)
@@ -384,8 +383,6 @@ def calculate_duplicate_names(api_extensions_list):
             for i in range(0, len(artifact_api.callables)):
                 version, name = artifact_api.get_name(i)
                 possible_duplicate = Duplicate(name, category)
-
-                callable_set_package.add(name)
                 if version not in api_version_dict:
                     api_version_dict[version] = set()
                 api_version_dict[version].add(possible_duplicate)
@@ -395,16 +392,16 @@ def calculate_duplicate_names(api_extensions_list):
             # and the api extension names:
             for version in bc_version_dict.keys():
                 if version in api_version_dict:
-                    to_remove_from_aix = to_remove_from_aix.union(bc_version_dict[version].intersection(api_version_dict[version]))
-                    acc += len(bc_version_dict[version].intersection(api_version_dict[version]))
+                    intersection = bc_version_dict[version].intersection(api_version_dict[version])
+                    to_remove_from_aix = to_remove_from_aix.union(intersection)
+                    # acc += len(intersection)
 
-            number_of_names += len(callable_set_package)
+            acc += len(to_remove_from_aix)
 
             # Remove duplicated names from AIX
             callables_without_duplicates = list()
             for i in range(0, len(artifact_api.callables)):
                 version, name = artifact_api.get_name(i)
-
                 searching_for_duplicate = Duplicate(name, category)
                 if searching_for_duplicate not in to_remove_from_aix:
                     callables_without_duplicates.append(artifact_api.callables[i])
@@ -415,12 +412,25 @@ def calculate_duplicate_names(api_extensions_list):
             artifact_to_add.callables = callables_without_duplicates
             artifact_to_add.violations = len(callables_without_duplicates)
 
-            api_extensions_without_duplicates.append(artifact_to_add)
-        print("%s methods are in category %s" %( total_removed, category))
+            api_extensions_without_duplicates.add(artifact_to_add)
+        print("%s methods are in category %s" % (total_removed, category))
+        print("%s unique methods are removed" % acc)
 
-    print("Total number of unique names involved in bc or apix:", number_of_names)
-    print("Of which total duplicated:", acc)
     return api_extensions_without_duplicates
+
+
+def countOverlapOfBCAndAPIEX(breaking_changes, api_extensions_list):
+    number_of_names = 0
+    for (artifact_bc, artifact_api) in zip(breaking_changes, api_extensions_list):
+        callable_set_package = set()
+        for i in range(0, len(artifact_bc.callables)):
+            version, name = artifact_bc.get_name(i)
+            callable_set_package.add(name)
+        for i in range(0, len(artifact_api.callables)):
+            version, name = artifact_api.get_name(i)
+            callable_set_package.add(name)
+        number_of_names += len(callable_set_package)
+    print("Total number of unique names involved in bc or apix:", number_of_names)
 
 
 def difference_between_majors():
@@ -440,14 +450,14 @@ def difference_between_majors():
 
 def calculate_percentage(versions):
     incremented = [1 for x in versions if x.violations > 0]
-    return sum(incremented) / len(versions) * 100
+    return len(incremented), sum(incremented) / len(versions) * 100
 
 
 def calculate_percentage_or(versions_one, versions_two):
     incremented_one = [(x.groupId + ":" + x.artifactId) for x in versions_one if x.violations > 0]
     incremented_two = [(x.groupId + ":" + x.artifactId) for x in versions_two if x.violations > 0]
     unio = set(incremented_one).union(set(incremented_two))
-    return len(unio) / len(versions_one) * 100
+    return len(unio), len(unio) / len(versions_one) * 100
 
 
 def versions_with_modules_bc(versions):
@@ -459,7 +469,8 @@ def versions_with_modules_bc(versions):
             split = version.split(":")
             formatted_version = split[0] + ":" + split[1]
             if formatted_version in artifacts:
-                if len(split[2][:-1].split(".")) > 2 and split[2][:-1].split(".")[1] == '0' and split[2][:-1].split(".")[2] == '0':
+                if len(split[2][:-1].split(".")) > 2 and split[2][:-1].split(".")[1] == '0' and \
+                        split[2][:-1].split(".")[2] == '0':
                     continue
                 i += 1
     return i
@@ -504,7 +515,7 @@ def artifacts_with_more_than_1_percent_violations(versions):
 
         if version.violations > (version.numberMethods / 100):
             version_set.add(groupId + ":" + artifactId)
-    return len(version_set) / len(versions) * 100
+    return len(version_set), len(version_set) / len(versions) * 100
 
 
 def intersect(removed, added):
@@ -545,34 +556,58 @@ if __name__ == '__main__':
     except OSError:
         pass
 
-
     # OLD:
-    # breaking_changes_missing = compress_major_to_package(read_file('breaking_changes'))
-    # api_extensions_missing = compress_major_to_package(read_file('api_extensions'))
-    #
-    # breaking_changes, api_extensions = add_missing_artifacts(breaking_changes_missing, api_extensions_missing)
+    breaking_changes_missing = compress_major_to_package(read_file('breaking_changes'))
+    api_extensions_missing = compress_major_to_package(read_file('api_extensions'))
 
-    # NEW (Comment previous 2 lines and uncomment the following 3 lines):
-    breaking_changes = compress_major_to_package(read_file('breaking_changes'))
-    api_extensions_with_duplicates = compress_major_to_package(read_file('api_extensions'))
-    api_extensions = calculate_duplicate_names(api_extensions_with_duplicates)
+    breaking_changes, all_api_extensions = add_missing_artifacts(breaking_changes_missing, api_extensions_missing)
+
+    api_extensions = calculate_duplicate_names(breaking_changes, all_api_extensions)
 
     print("Numbers:")
     # print("Number of artifacts:", len(artifacts))
-    print("Percentage of artifacts with BC or AX:", calculate_percentage_or(breaking_changes, api_extensions))
-    print("Percentage of artifacts with BC:", calculate_percentage(breaking_changes))
-    print("Percentage of artifacts with AX", calculate_percentage(api_extensions))
+    print("Percentage of artifacts with BC or AX %s(%s percent)" %(calculate_percentage_or(breaking_changes, api_extensions)))
+    print("Number of artifacts with at least one BC %s(%s percent)" %(calculate_percentage(breaking_changes)))
+    print("Number of artifacts with at least one AX %s(%s percent)" %(calculate_percentage(api_extensions)))
 
-    print("bc percentage of releases:", versions_with_violations(breaking_changes) / versions_with_modules_bc(breaking_changes) * 100)
-    print("ax percentage of releases:", versions_with_violations(api_extensions) / versions_with_modules_ax(api_extensions) * 100)
+    # TODO check with Simcha
+    print("percentage of minor and patch releases containing bc:",
+          versions_with_violations(breaking_changes) / versions_with_modules_bc(breaking_changes) * 100)
 
-    print("Artifacts with more than 1% BC:", artifacts_with_more_than_1_percent_violations(breaking_changes))
+    # print("percentage of releases released through ax:",
+    #       versions_with_violations(api_extensions) / versions_with_modules_ax(api_extensions) * 100)
+    # print("Artifacts with more than 1% BC %s(%s percent)", artifacts_with_more_than_1_percent_violations(breaking_changes))
+    # print("Artifacts with more than 1% ac %s(%s percent)", artifacts_with_more_than_1_percent_violations(api_extensions))
 
     for violation in 'breaking_changes', 'api_extensions':
-        histogram(violation)
+        print(violation + ":")
+        bc_list = histogram(violation)
+        non_zero = [x for x in bc_list if x != 0]
+        count = 0
+        for num in non_zero:
+            if num < 1:
+                count += 1
+        print("Number of artifacts with violated methods less than 1 percent:", count)
+        count = 0
+        for num in non_zero:
+            if num >= 50:
+                count += 1
+        print("Number of artifacts with violated methods more than equal 50 percent:", count)
+
+        count = 0
+        for num in non_zero:
+            if num < 15:
+                count += 1
+        print("Number of artifacts with violated methods less than 15 percent:", count)
+
+        average = sum(non_zero) / len(non_zero)
+        print("average number of methods involved in violation in artifacts that at least have one : ", average)
+
         trendline(violation)
 
     for metric in 'dependent-percentage', 'eigenvector', 'degree':
         calculate_popularity(metric)
 
     quintile_dep_percentage()
+
+
